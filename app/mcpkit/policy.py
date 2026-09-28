@@ -27,7 +27,7 @@ class Policy:
     def from_json(cls, raw: str) -> Policy:
         data = json.loads(raw or "{}")
         if not isinstance(data, dict):
-            raise ValueError("CALLERS_JSON must be an object of email -> [scopes]")
+            raise TypeError("CALLERS_JSON must be an object of email -> [scopes]")
         return cls(data)
 
     def lookup(self, email: str) -> Caller | None:

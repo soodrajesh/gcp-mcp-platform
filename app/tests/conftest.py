@@ -20,6 +20,8 @@ TOKENS = {  # token -> claims: stands in for Google's signature check
     },
     "tok-unverified": {"email": "op@example.com", "email_verified": False},
     "tok-noemail": {"sub": "123"},
+    "tok-sa-cli-aud": {"email": "agent@p.iam.gserviceaccount.com", "email_verified": True, "aud": "32555940559.apps.googleusercontent.com"},
+    "tok-human-cli-aud": {"email": "op@example.com", "email_verified": True, "aud": "32555940559.apps.googleusercontent.com"},
 }
 POLICY = {
     "op@example.com": ["ops:read", "notes:read", "notes:write"],
@@ -28,7 +30,7 @@ POLICY = {
 
 
 def fake_verifier(token, audiences):
-    assert audiences == ["https://svc.example"]
+    assert audiences == ["https://svc.example", "32555940559.apps.googleusercontent.com"]
     if token not in TOKENS:
         raise ValueError("bad signature")
     return TOKENS[token]
@@ -36,7 +38,7 @@ def fake_verifier(token, audiences):
 
 @pytest.fixture
 def make_app(monkeypatch):
-    monkeypatch.setenv("ALLOWED_AUDIENCES", "https://svc.example")
+    monkeypatch.setenv("ALLOWED_AUDIENCES", "https://svc.example,32555940559.apps.googleusercontent.com")
 
     def _make(server="notes", limit=1000):
         from main import build_app
@@ -58,6 +60,4 @@ HEADERS = {
 
 
 def rpc(method, params=None, id_=1):
-    return json.dumps(
-        {"jsonrpc": "2.0", "id": id_, "method": method, "params": params or {}}
-    )
+    return json.dumps({"jsonrpc": "2.0", "id": id_, "method": method, "params": params or {}})

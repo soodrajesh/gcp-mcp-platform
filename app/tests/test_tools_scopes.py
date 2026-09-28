@@ -2,9 +2,9 @@
 
 import json
 
+from servers import notes
 from starlette.testclient import TestClient
 
-from servers import notes
 from tests.conftest import HEADERS, rpc
 
 
@@ -37,11 +37,7 @@ class FakeQuery:
         return self
 
     def stream(self):
-        return [
-            FakeDoc(self.store, i)
-            for i, d in self.store.items()
-            if d["owner"] == self.owner
-        ]
+        return [FakeDoc(self.store, i) for i, d in self.store.items() if d["owner"] == self.owner]
 
 
 class FakeCol:
@@ -65,9 +61,7 @@ class FakeDb:
 
 def call(client, token, tool, args):
     body = rpc("tools/call", {"name": tool, "arguments": args})
-    r = client.post(
-        "/mcp", content=body, headers={**HEADERS, "Authorization": f"Bearer {token}"}
-    )
+    r = client.post("/mcp", content=body, headers={**HEADERS, "Authorization": f"Bearer {token}"})
     assert r.status_code == 200, r.text
     res = r.json()["result"]
     text = res["content"][0]["text"] if res.get("content") else ""
@@ -79,17 +73,8 @@ def test_read_only_caller_cannot_write_and_it_is_audited(make_app, monkeypatch, 
     with TestClient(make_app()) as c:
         is_err, text = call(c, "tok-agent", "add_note", {"title": "t", "body": "b"})
     assert is_err and "notes:write" in text
-    audit = [
-        json.loads(line)
-        for line in capsys.readouterr().out.splitlines()
-        if line.startswith("{")
-    ]
-    assert any(
-        a["tool"] == "add_note"
-        and a["decision"] == "denied"
-        and a["reason"] == "missing_scope:notes:write"
-        for a in audit
-    )
+    audit = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{") and '"tool"' in line]
+    assert any(a["tool"] == "add_note" and a["decision"] == "denied" and a["reason"] == "missing_scope:notes:write" for a in audit)
 
 
 def test_notes_are_private_to_their_owner(make_app, monkeypatch):
@@ -105,15 +90,11 @@ def test_notes_are_private_to_their_owner(make_app, monkeypatch):
         assert not is_err
         note_id = json.loads(text)["id"]
         mine = json.loads(call(c, "tok-op", "search_notes", {"query": "secret"})[1])
-        theirs = json.loads(
-            call(c, "tok-agent", "search_notes", {"query": "secret"})[1]
-        )
+        theirs = json.loads(call(c, "tok-agent", "search_notes", {"query": "secret"})[1])
         stolen_err, stolen_text = call(c, "tok-agent", "get_note", {"note_id": note_id})
         missing_err, missing_text = call(c, "tok-op", "get_note", {"note_id": "0" * 32})
     assert mine["count"] == 1 and theirs["count"] == 0
-    assert stolen_err and missing_err and stolen_text == missing_text, (
-        "no existence oracle: same error either way"
-    )
+    assert stolen_err and missing_err and stolen_text == missing_text, "no existence oracle: same error either way"
 
 
 def test_note_results_carry_the_untrusted_content_warning(make_app, monkeypatch):

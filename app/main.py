@@ -7,7 +7,6 @@ import importlib
 import os
 
 from mcp.server.fastmcp import FastMCP
-
 from mcpkit.guard import GuardMiddleware
 from mcpkit.policy import Policy
 from mcpkit.ratelimit import FirestoreStore, MemoryStore, RateLimiter
@@ -35,9 +34,7 @@ def build_app(
         if os.environ.get("FIRESTORE_DB"):
             from google.cloud import firestore
 
-            client = firestore.Client(
-                project=os.environ["PROJECT_ID"], database=os.environ["FIRESTORE_DB"]
-            )
+            client = firestore.Client(project=os.environ["PROJECT_ID"], database=os.environ["FIRESTORE_DB"])
             limiter = RateLimiter(FirestoreStore(client), limit)
         else:
             limiter = RateLimiter(MemoryStore(), limit)

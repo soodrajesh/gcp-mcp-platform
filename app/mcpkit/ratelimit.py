@@ -49,9 +49,7 @@ class FirestoreStore:
 
 
 class RateLimiter:
-    def __init__(
-        self, store: CounterStore, limit: int, window_s: int = 60, clock=time.time
-    ):
+    def __init__(self, store: CounterStore, limit: int, window_s: int = 60, clock=time.time):
         self.store, self.limit, self.window_s, self.clock = (
             store,
             limit,
@@ -64,8 +62,6 @@ class RateLimiter:
         now = self.clock()
         window = int(now // self.window_s)
         key = f"{hashlib.sha256(email.encode()).hexdigest()[:16]}-{window}"
-        expire = datetime.fromtimestamp(
-            (window + 2) * self.window_s, tz=timezone.utc
-        ) + timedelta(minutes=5)
+        expire = datetime.fromtimestamp((window + 2) * self.window_s, tz=timezone.utc) + timedelta(minutes=5)
         count = self.store.incr(key, expire)
         return count <= self.limit, int((window + 1) * self.window_s - now) + 1

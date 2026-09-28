@@ -8,7 +8,6 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import FastMCP
-
 from mcpkit.guard import guarded
 
 SERVER = "ops"
@@ -30,12 +29,8 @@ def _service_row(svc) -> dict:
     return {
         "name": svc.name.rsplit("/", 1)[-1],
         "url": svc.uri,
-        "latest_ready_revision": svc.latest_ready_revision.rsplit("/", 1)[-1]
-        if svc.latest_ready_revision
-        else "",
-        "image_digest": image.split("@")[-1]
-        if "@" in image
-        else "(not pinned by digest)",
+        "latest_ready_revision": svc.latest_ready_revision.rsplit("/", 1)[-1] if svc.latest_ready_revision else "",
+        "image_digest": image.split("@")[-1] if "@" in image else "(not pinned by digest)",
         "ingress": svc.ingress.name,
         "updated": svc.update_time.isoformat() if svc.update_time else "",
     }
@@ -49,12 +44,7 @@ def register(mcp: FastMCP) -> None:
         from google.cloud import run_v2
 
         client = run_v2.ServicesClient()
-        services = [
-            _service_row(s)
-            for s in client.list_services(
-                parent=f"projects/{_project()}/locations/{_region()}"
-            )
-        ]
+        services = [_service_row(s) for s in client.list_services(parent=f"projects/{_project()}/locations/{_region()}")]
         return {"region": _region(), "count": len(services), "services": services}
 
     @mcp.tool()
@@ -64,25 +54,18 @@ def register(mcp: FastMCP) -> None:
         from google.cloud import logging as cloud_logging
 
         if not SERVICE_RE.match(service):
-            raise ValueError(
-                "service must be a Cloud Run service name (lowercase letters, digits, hyphens)"
-            )
+            raise ValueError("service must be a Cloud Run service name (lowercase letters, digits, hyphens)")
         if not 1 <= minutes <= 1440:
             raise ValueError("minutes must be between 1 and 1440")
         if not 1 <= limit <= 50:
             raise ValueError("limit must be between 1 and 50")
-        since = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        since = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
         flt = (
-            'resource.type="cloud_run_revision" '
-            f'AND resource.labels.service_name="{service}" AND severity>=ERROR AND timestamp>="{since}"'
+            f'resource.type="cloud_run_revision" AND resource.labels.service_name="{service}" AND severity>=ERROR AND timestamp>="{since}"'
         )
         client = cloud_logging.Client(project=_project())
         entries = []
-        for e in client.list_entries(
-            filter_=flt, order_by=cloud_logging.DESCENDING, max_results=limit
-        ):
+        for e in client.list_entries(filter_=flt, order_by=cloud_logging.DESCENDING, max_results=limit):
             payload = e.payload if isinstance(e.payload, str) else str(e.payload)
             entries.append(
                 {
@@ -107,9 +90,7 @@ def register(mcp: FastMCP) -> None:
         if len(sql) > MAX_SQL:
             raise ValueError(f"sql longer than {MAX_SQL} characters")
         client = bigquery.Client(project=_project())
-        job = client.query(
-            sql, job_config=bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
-        )
+        job = client.query(sql, job_config=bigquery.QueryJobConfig(dry_run=True, use_query_cache=False))
         scanned = job.total_bytes_processed or 0
         return {
             "bytes_processed": scanned,

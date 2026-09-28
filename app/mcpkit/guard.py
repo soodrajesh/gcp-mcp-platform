@@ -13,14 +13,10 @@ from mcpkit.auth import AuthError, caller_email
 from mcpkit.policy import Caller, Policy
 from mcpkit.ratelimit import RateLimiter
 
-current_caller: contextvars.ContextVar[Caller | None] = contextvars.ContextVar(
-    "current_caller", default=None
-)
+current_caller: contextvars.ContextVar[Caller | None] = contextvars.ContextVar("current_caller", default=None)
 
 
-async def _reply(
-    send, status: int, body: dict, headers: dict[str, str] | None = None
-) -> None:
+async def _reply(send, status: int, body: dict, headers: dict[str, str] | None = None) -> None:
     payload = json.dumps(body).encode()
     hdrs = [
         (b"content-type", b"application/json"),
@@ -50,6 +46,21 @@ class GuardMiddleware:
         if scope["type"] != "http":  # lifespan etc. pass straight through
             return await self.app(scope, receive, send)
         headers = {k.decode().lower(): v.decode() for k, v in scope["headers"]}
+        import json as _json
+        import sys as _sys
+
+        print(
+            _json.dumps(
+                {
+                    "event": "debug_headers",
+                    "n": len(scope["headers"]),
+                    "auth_len": len(headers.get("authorization", "")),
+                    "all_lens": {k: len(v) for k, v in headers.items()},
+                }
+            ),
+            file=_sys.stdout,
+            flush=True,
+        )
         try:
             kwargs = {"verifier": self.verifier} if self.verifier else {}
             email = caller_email(headers.get("authorization"), self.audiences, **kwargs)
@@ -59,7 +70,7 @@ class GuardMiddleware:
                 caller="unauthenticated",
                 tool="*",
                 decision="denied",
-                reason=exc.reason,
+                reason=exc.reason + (f" [{exc.detail}]" if exc.detail else ""),
                 status=exc.status,
             )
             return await _reply(send, exc.status, {"error": exc.reason})
@@ -84,9 +95,7 @@ class GuardMiddleware:
                 reason="rate_limited",
                 status=429,
             )
-            return await _reply(
-                send, 429, {"error": "rate_limited"}, {"retry-after": str(retry_after)}
-            )
+            return await _reply(send, 429, {"error": "rate_limited"}, {"retry-after": str(retry_after)})
         token = current_caller.set(caller)
         try:
             return await self.app(scope, receive, send)

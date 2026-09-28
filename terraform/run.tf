@@ -3,14 +3,17 @@ locals {
     "mcp-ops"   = { server = "ops", sa = "mcp-ops-server" }
     "mcp-notes" = { server = "notes", sa = "mcp-notes-server" }
   }
-  # Cloud Run issues identity-token audiences of the form https://<service>-<project number>.<region>.run.app
+  # One stable audience string per service, declared on the service as a custom audience below.
   audiences = { for name, _ in local.services : name => "https://${name}-${data.google_project.this.number}.${var.region}.run.app" }
 
   # The whole access policy, reviewed in a PR. mcp-guest and mcp-stranger are deliberately absent.
+  # The human operator authenticates as a service account too (ADR 0005): a raw
+  # `gcloud auth print-identity-token` user token is truncated in transit by Cloud Run's front
+  # end before it reaches the app, so it cannot be relied on for MCP calls.
   callers = {
-    (lower(var.admin_email))      = ["ops:read", "notes:read", "notes:write"]
-    (local.sa_email["mcp-agent"]) = ["ops:read", "notes:read"]
-    (local.sa_email["mcp-burst"]) = ["ops:read"]
+    (local.sa_email["mcp-operator"]) = ["ops:read", "notes:read", "notes:write"]
+    (local.sa_email["mcp-agent"])    = ["ops:read", "notes:read"]
+    (local.sa_email["mcp-burst"])    = ["ops:read"]
   }
 }
 
@@ -21,6 +24,9 @@ resource "google_cloud_run_v2_service" "mcp" {
   location            = var.region
   deletion_protection = false
   ingress             = "INGRESS_TRAFFIC_ALL"
+  # Tokens minted for this string are accepted by Cloud Run's own IAM check AND verified again by the
+  # app. (A URL we merely construct is NOT accepted as an audience unless declared here.)
+  custom_audiences = [local.audiences[each.key]]
 
   template {
     service_account = local.sa_email[each.value.sa]
@@ -51,8 +57,10 @@ resource "google_cloud_run_v2_service" "mcp" {
         value = jsonencode(local.callers)
       }
       env {
-        name  = "ALLOWED_AUDIENCES"
-        value = local.audiences[each.key]
+        name = "ALLOWED_AUDIENCES"
+        # the service's own audience, plus the gcloud CLI client id that every HUMAN token carries
+        # (the app refuses that audience from service accounts; see app/mcpkit/auth.py)
+        value = "${local.audiences[each.key]},32555940559.apps.googleusercontent.com"
       }
       env {
         name  = "RATE_LIMIT_PER_MIN"

@@ -8,6 +8,7 @@ locals {
     "mcp-build"        = "Cloud Build: builds and pushes the image"
   }
   client_sas = {
+    "mcp-operator" = "The human operator's caller identity: ops:read + notes:read + notes:write"
     "mcp-agent"    = "Registered caller: ops:read + notes:read (cannot write notes)"
     "mcp-burst"    = "Registered caller: ops:read only; used to trip the rate limit"
     "mcp-guest"    = "Has run.invoker but is NOT registered in the caller policy"
@@ -54,7 +55,8 @@ resource "google_project_iam_member" "log_writer" {
 # ── who can reach the services (Cloud Run IAM: the first layer) ──
 locals {
   invokers = toset([
-    "user:${var.admin_email}",
+    "user:${var.admin_email}", # kept so a raw human token is refused at the APP layer, not by Cloud Run IAM (see ADR 0005 test)
+    "serviceAccount:${local.sa_email["mcp-operator"]}",
     "serviceAccount:${local.sa_email["mcp-agent"]}",
     "serviceAccount:${local.sa_email["mcp-burst"]}",
     "serviceAccount:${local.sa_email["mcp-guest"]}",

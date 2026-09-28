@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 
 from mcp.server.fastmcp import FastMCP
-
 from mcpkit.guard import current_caller, guarded
 
 SERVER = "notes"
@@ -25,9 +24,7 @@ def db():
     if _client is None:
         from google.cloud import firestore
 
-        _client = firestore.Client(
-            project=os.environ["PROJECT_ID"], database=os.environ["FIRESTORE_DB"]
-        )
+        _client = firestore.Client(project=os.environ["PROJECT_ID"], database=os.environ["FIRESTORE_DB"])
     return _client
 
 
@@ -72,17 +69,10 @@ def register(mcp: FastMCP) -> None:
         """Search your own notes by substring of title/body and/or an exact tag (newest first)."""
         if not 1 <= limit <= 50:
             raise ValueError("limit must be between 1 and 50")
-        docs = (
-            db().collection("notes").where("owner", "==", _owner()).limit(200).stream()
-        )
+        docs = db().collection("notes").where("owner", "==", _owner()).limit(200).stream()
         q = query.lower()
         rows = [_public(d.id, d.to_dict()) for d in docs]
-        rows = [
-            r
-            for r in rows
-            if (not q or q in r["title"].lower() or q in r["body"].lower())
-            and (not tag or tag in r["tags"])
-        ]
+        rows = [r for r in rows if (not q or q in r["title"].lower() or q in r["body"].lower()) and (not tag or tag in r["tags"])]
         rows.sort(key=lambda r: r["created"], reverse=True)
         return {"count": len(rows[:limit]), "notes": rows[:limit], "warning": UNTRUSTED}
 

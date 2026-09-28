@@ -35,17 +35,19 @@ tf_apply() {
   $TF apply -input=false -auto-approve "$@"
 }
 
-# Identity token for an MCP service: as the operator, or as a client service account (impersonated).
-#   id_token <audience>            -> operator
-#   id_token <audience> <sa-name>  -> e.g. mcp-agent
+# Identity token for an MCP service, impersonating a service account.
+#   id_token <audience>              -> mcp-operator (the human's caller identity; see ADR 0005 —
+#                                        a raw human `gcloud auth print-identity-token` is truncated
+#                                        in transit by Cloud Run's front end and cannot be used here)
+#   id_token <audience> <sa-name>    -> e.g. mcp-agent
 id_token() {
-  if [ -n "${2:-}" ]; then
-    gcloud auth print-identity-token --impersonate-service-account="$2@$PROJECT_ID.iam.gserviceaccount.com" \
-      --audiences="$1" --include-email 2>/dev/null
-  else
-    gcloud auth print-identity-token --audiences="$1" 2>/dev/null
-  fi
+  local sa="${2:-mcp-operator}"
+  gcloud auth print-identity-token --impersonate-service-account="$sa@$PROJECT_ID.iam.gserviceaccount.com" \
+    --audiences="$1" --include-email 2>/dev/null
 }
+
+# The RAW human token, for the one test that documents why it can't be used (ADR 0005).
+id_token_human() { gcloud auth print-identity-token 2>/dev/null; }
 
 # The Python environment for the MCP client and unit tests.
 PY="$ROOT/.venv/bin/python"
